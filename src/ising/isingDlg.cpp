@@ -48,6 +48,8 @@ void CIsingDlg::DoDataExchange(CDataExchange* pDX)
     DDX_Text(pDX, IDC_EDIT7, m_n);
     DDX_Text(pDX, IDC_EDIT5, m_S);
     DDX_Text(pDX, IDC_EDIT6, m_M);
+    DDX_Control(pDX, IDC_CHECK3, m_bOpenCLCtrl);
+    DDX_Control(pDX, IDC_CHECK4, m_bGpuCtrl);
 }
 
 BEGIN_MESSAGE_MAP(CIsingDlg, CSimulationDialog)
@@ -160,6 +162,8 @@ void CIsingDlg::OnSimulation()
 
     srand(std::time(NULL));
 
+    m_data.params->opencl_gpu = m_bGpuCtrl.GetCheck();
+
     m_data.system_data.init(*m_data.params);
 
     CleanPlot();
@@ -235,7 +239,7 @@ void CIsingDlg::OnDemo()
     m_data.system_data.begin(*m_data.params, T);
     for (size_t i = 0; (i < m_S) && m_bWorking; ++i)
     {
-        m_data.system_data.next_opencl();
+        m_data.system_data.next(m_bOpenCLCtrl.GetCheck());
         UpdateSpins(false);
     }
     m_data.system_data.end();
@@ -248,7 +252,7 @@ void CIsingDlg::OnDemo()
         m_data.system_data.begin(*m_data.params, T);
         for (size_t i = 0; (i < m_M) && m_bWorking; ++i)
         {
-            m_data.system_data.next_opencl();
+            m_data.system_data.next(m_bOpenCLCtrl.GetCheck());
             UpdateSpins(false);
         }
         m_data.system_data.end();
@@ -269,7 +273,7 @@ void CIsingDlg::OnCalc()
     m_data.system_data.begin(*m_data.params, T0);
     for (size_t i = 0; (i < m_S * 10) && m_bWorking; ++i)
     {
-        m_data.system_data.next_opencl();
+        m_data.system_data.next(m_bOpenCLCtrl.GetCheck());
         UpdateSpins(false);
     }
     m_data.system_data.end();
@@ -283,7 +287,7 @@ void CIsingDlg::OnCalc()
         m_data.system_data.begin(*m_data.params, T);
         for (size_t i = 0; (i < m_S) && m_bWorking; ++i)
         {
-            m_data.system_data.next_opencl();
+            m_data.system_data.next(m_bOpenCLCtrl.GetCheck());
             UpdateSpins(false);
         }
         m_data.system_data.end();
@@ -292,7 +296,7 @@ void CIsingDlg::OnCalc()
         m_data.system_data.begin(*m_data.params, T);
         for (size_t i = 0; (i < m_M) && m_bWorking; ++i)
         {
-            m_data.system_data.next_opencl();
+            m_data.system_data.next(m_bOpenCLCtrl.GetCheck());
             UpdateSpins(false);
         }
         m_data.system_data.end();

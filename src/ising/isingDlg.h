@@ -58,4 +58,6 @@ public:
     void UpdateSpins(bool keyframe);
     CEdit m_Te;
     afx_msg void OnBnClickedButton4();
+    CButton m_bOpenCLCtrl;
+    CButton m_bGpuCtrl;
 };

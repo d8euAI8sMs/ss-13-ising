@@ -42,6 +42,9 @@ namespace model
         // other params
         double J /* eV */;
 
+        // computation params
+        bool opencl_gpu;
+
         double Tc() const { return 2.269 * std::abs(J) / consts::k; }
     };
 
@@ -53,7 +56,10 @@ namespace model
             10,
 
             // other params
-            1
+            1,
+
+            // computation params
+            true,
         };
         return p;
     }
@@ -167,7 +173,8 @@ namespace model
             }
             ensure_periodic(p);
             aparams = { 0, 0, 0, 0, 0, nullptr, 0 };
-
+            
+            init_opencl_common(*ocl_data, p.opencl_gpu);
             init_opencl_data(*ocl_data, data, w);
         }
 
@@ -176,6 +183,12 @@ namespace model
             aparams = { 0, 0, 0, 0, 0, &p, T };
             aparams.w[0] = std::exp(- 8 * std::abs(p.J) / consts::k / T);
             aparams.w[1] = std::exp(- 4 * std::abs(p.J) / consts::k / T);
+        }
+
+        void next(bool opencl)
+        {
+            if (opencl) next_opencl();
+            else        next();
         }
 
         void next()
@@ -536,7 +549,6 @@ namespace model
         md.c_data = make_plot_data(plot::palette::pen(0x0000ff, 2));
         md.hi_data = make_plot_data(plot::palette::pen(0x0000ff, 2));
         md.ocl_data = util::create < opencl_data > ();
-        init_opencl_common(*md.ocl_data);
         md.system_data.ocl_data = md.ocl_data.get();
         return md;
     }
