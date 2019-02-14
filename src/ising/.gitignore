@@ -7,4 +7,5 @@ obj
 ipch
 Debug
 Release
+.vs
 ReadMe.txt
