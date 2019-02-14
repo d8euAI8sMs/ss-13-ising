@@ -67,20 +67,20 @@ namespace model
             double w[2];
         };
     public:
-        std::vector < std::vector < bool > > data;
+        size_t w;
+        std::vector < int > data;
         macroparams params;
     private:
         avgparams aparams;
     public:
         void init(const parameters & p)
         {
+            w = p.n;
             data.clear();
-            data.resize(p.n + 2);
-            for (size_t i = 0; i < p.n + 2; ++i)
+            data.resize((w + 2) * (w * 2));
+            for (size_t i = 0; i < data.size(); ++i)
             {
-                data[i].resize(p.n + 2);
-                for (int j = 0; j < p.n + 2; ++j)
-                    data[i][j] = (rand() & 1) == 1;
+                data[i] = ((rand() & 1) == 1) ? 1 : -1;
             }
             ensure_periodic(p);
             aparams = { 0, 0, 0, 0, 0, nullptr, 0 };
@@ -97,54 +97,52 @@ namespace model
         {
             int s = 0;
 
-            const size_t n = aparams.p->n;
-
-            if ((n - 2) < 4 * omp_get_max_threads())
-                next_linear(n);
+            if ((w - 2) < 4 * omp_get_max_threads())
+                next_linear(w);
             else
-                next_parallel(n);
+                next_parallel(w);
             
             if (aparams.p->J > 0)
             {
                 size_t np = 0, nm = 0;
-                for (size_t i = 1; i < n + 1; ++i)
+                for (size_t i = 1; i < w + 1; ++i)
                 #pragma omp parallel for reduction(+:np,nm,s) firstprivate(i)
-                for (int j = 1; j < n + 1; ++j)
+                for (int j = 1; j < w + 1; ++j)
                 {
-                    np += data[i][j] ? 1 : 0;
-                    nm += data[i][j] ? 0 : 1;
+                    np += data[i * (w + 2) + j] == 1 ? 1 : 0;
+                    nm += data[i * (w + 2) + j] == -1 ? 0 : 1;
                     s += spin_at(i, j) * (spin_at(i - 1, j) + spin_at(i, j - 1));
                 }
-                params.m = std::abs((double)np - (double)nm) / n / n / n / n;
+                params.m = std::abs((double)np - (double)nm) / w / w / w / w;
             }
             else
             {
                 size_t n1p = 0, n1m = 0, n2p = 0, n2m = 0;
-                for (size_t i = 1; i < n + 1; ++i)
+                for (size_t i = 1; i < w + 1; ++i)
                 {
                     #pragma omp parallel for reduction(+:n1p,n1m,n2p,n2m,s) firstprivate(i)
-                    for (int j = 1 + (i & 1); j < n + 1; j += 2)
+                    for (int j = 1 + (i & 1); j < w + 1; j += 2)
                     {
-                        n1p += data[i][j] ? 1 : 0;
-                        n1m += data[i][j] ? 0 : 1;
-                        n2p += data[i][j + 1] ? 1 : 0;
-                        n2m += data[i][j + 1] ? 0 : 1;
+                        n1p += data[i * (w + 2) + j] == 1 ? 1 : 0;
+                        n1m += data[i * (w + 2) + j] == -1 ? 0 : 1;
+                        n2p += data[i * (w + 2) + j + 1] == 1 ? 1 : 0;
+                        n2m += data[i * (w + 2) + j + 1] == -1 ? 0 : 1;
                         s += spin_at(i, j) * (spin_at(i - 1, j) + spin_at(i, j - 1));
                     }
                     #pragma omp parallel for reduction(+:n1p,n1m,n2p,n2m,s) firstprivate(i)
-                    for (int j = 1 + (1 - (i & 1)); j < n + 1; j += 2)
+                    for (int j = 1 + (1 - (i & 1)); j < w + 1; j += 2)
                     {
-                        n1p += data[i][j + 1] ? 1 : 0;
-                        n1m += data[i][j + 1] ? 0 : 1;
-                        n2p += data[i][j] ? 1 : 0;
-                        n2m += data[i][j] ? 0 : 1;
+                        n1p += data[i * (w + 2) + j + 1] == 1 ? 1 : 0;
+                        n1m += data[i * (w + 2) + j + 1] == -1 ? 0 : 1;
+                        n2p += data[i * (w + 2) + j] == 1 ? 1 : 0;
+                        n2m += data[i * (w + 2) + j] == -1 ? 0 : 1;
                         s += spin_at(i, j) * (spin_at(i - 1, j) + spin_at(i, j - 1));
                     }
                 }
-                params.m = std::abs(((double)n1p - (double)n1m) - ((double)n2p - (double)n2m)) / n / n / n / n;
+                params.m = std::abs(((double)n1p - (double)n1m) - ((double)n2p - (double)n2m)) / w / w / w / w;
             }
 
-            params.e = std::abs(aparams.p->J * s / n / n);
+            params.e = std::abs(aparams.p->J * s / w / w);
 
             aparams.ea += params.e;
             aparams.ma += params.m;
@@ -173,26 +171,26 @@ namespace model
 
     private:
 
-        int spin_at(size_t i, size_t j) const { return data[i][j] ? 1 : -1; }
+        int spin_at(size_t i, size_t j) const { return data[i * (w + 2) + j]; }
 
         void ensure_periodic(const parameters & p)
         {
             #pragma omp parallel for
             for (int i = 0; i < p.n + 2; ++i)
             {
-                data[i][0] = data[i][p.n];
-                data[i][p.n + 1] = data[i][1];
-                data[0][i] = data[p.n][i];
-                data[p.n + 1][i] = data[1][i];
+                data[i * (p.n + 2) + 0] = data[i * (p.n + 2) + p.n];
+                data[i * (p.n + 2) + p.n + 1] = data[i * (p.n + 2) + 1];
+                data[0 * (p.n + 2) + i] = data[p.n * (p.n + 2) + i];
+                data[(p.n + 1) * (p.n + 2) + i] = data[1 * (p.n + 2) + i];
             }
         }
 
         void ensure_periodic(const parameters & p, size_t i, size_t j)
         {
-            data[p.n + 1][j] = data[1][j];
-            data[i][p.n + 1] = data[i][1];
-            data[0][j] = data[p.n][j];
-            data[i][0] = data[i][p.n];
+            data[(p.n + 1) * (p.n + 2) + j] = data[1 * (p.n + 2) + j];
+            data[i * (p.n + 2) + p.n + 1] = data[i * (p.n + 2) + 1];
+            data[0 * (p.n + 2) + j] = data[p.n * (p.n + 2) + j];
+            data[i * (p.n + 2) + 0] = data[i * (p.n + 2) + p.n];
         }
 
         size_t dE(size_t i, size_t j) const
@@ -210,11 +208,11 @@ namespace model
                 size_t i = (rand() % n) + 1;
                 size_t j = (rand() % n) + 1;
                 size_t c = dE(i, j);
-                if (c >= 2) data[i][j] = !data[i][j];
+                if (c >= 2) data[i * (n + 2) + j] = -data[i * (n + 2) + j];
                 else
                 {
                     if (rand() < aparams.w[c] * RAND_MAX)
-                        data[i][j] = !data[i][j];
+                        data[i * (n + 2) + j] = -data[i * (n + 2) + j];
                 }
                 ensure_periodic(*aparams.p, i, j);
             }
@@ -245,11 +243,11 @@ namespace model
                         #pragma omp critical
                         {
                             size_t c = dE(i, j);
-                            if (c >= 2) data[i][j] = !data[i][j];
+                            if (c >= 2) data[i * (n + 2) + j] = -data[i * (n + 2) + j];
                             else
                             {
                                 if (rand() < aparams.w[c] * RAND_MAX)
-                                    data[i][j] = !data[i][j];
+                                    data[i * (n + 2) + j] = -data[i * (n + 2) + j];
                             }
                             ensure_periodic(*aparams.p, i, j);
                         }
@@ -257,11 +255,11 @@ namespace model
                     else
                     {
                         size_t c = dE(i, j);
-                        if (c >= 2) data[i][j] = !data[i][j];
+                        if (c >= 2) data[i * (n + 2) + j] = -data[i * (n + 2) + j];
                         else
                         {
                             if (rand() < aparams.w[c] * RAND_MAX)
-                                data[i][j] = !data[i][j];
+                                data[i * (n + 2) + j] = -data[i * (n + 2) + j];
                         }
                         if (i == n || i == 1 || j == n || j == 1)
                         {
@@ -355,8 +353,8 @@ namespace model
         size_t cw = 5, ch = 5;
 
         auto bmp = std::make_unique < CBitmap > ();
-        bmp->CreateBitmap(cw * (b.data.size() - 2), ch * (b.data.size() - 2), 1, 32, NULL);
-        bmp->SetBitmapDimension(cw * (b.data.size() - 2), ch * (b.data.size() - 2));
+        bmp->CreateBitmap(cw * b.w, ch * b.w, 1, 32, NULL);
+        bmp->SetBitmapDimension(cw * b.w, ch * b.w);
 
         dc.SelectObject(bmp.get());
 
@@ -365,10 +363,10 @@ namespace model
 
         CRect r;
 
-        for (size_t i = 0; i < b.data.size() - 2; ++i)
-        for (size_t j = 0; j < b.data.size() - 2; ++j)
+        for (size_t i = 0; i < b.w; ++i)
+        for (size_t j = 0; j < b.w; ++j)
         {
-            bool v = b.data[i + 1][j + 1];
+            bool v = b.data[(i + 1) * (b.w + 2) + j + 1] == 1;
             r.left = cw * i; r.right = cw * (i + 1);
             r.top = ch * j; r.bottom = ch * (j + 1);
             if (borders)
@@ -396,8 +394,8 @@ namespace model
         {
             if (b.data.empty()) return;
 
-            size_t cw = vp.screen.width() / (b.data.size() - 2);
-            size_t ch = vp.screen.height() / (b.data.size() - 2);
+            size_t cw = vp.screen.width() / b.w;
+            size_t ch = vp.screen.height() / b.w;
 
             auto nbrush = plot::palette::brush(RGB(150,0,0));
             auto pbrush = plot::palette::brush(RGB(0,150,0));
@@ -405,10 +403,10 @@ namespace model
             if (cw > 2 && ch > 2)
             {
                 CRect r;
-                for (size_t i = 0; i < b.data.size() - 2; ++i)
-                for (size_t j = 0; j < b.data.size() - 2; ++j)
+                for (size_t i = 0; i < b.w; ++i)
+                for (size_t j = 0; j < b.w; ++j)
                 {
-                    bool v = b.data[i + 1][j + 1];
+                    bool v = b.data[(i + 1) * (b.w + 2) + j + 1] == 1;
                     dc.SelectObject(v ? pbrush.get() : nbrush.get());
                     dc.Rectangle(vp.screen.xmin + cw * i,
                                  vp.screen.ymin + ch * j,
