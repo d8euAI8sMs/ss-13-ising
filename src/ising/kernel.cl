@@ -6,11 +6,8 @@ float rand(float x, float y, float z) {
     return fract(sin(x * 112.9898f + y * 179.233f + z * 237.212f) * 43758.5453f, &ptr);
 }
 
-int dE(int s, int x, int y, int w, int h, local int * local_board) {
-	const int ds = local_board[y * w + (x - 1)] +
-				    local_board[(y - 1) * w + x] +
-				    local_board[y * w + (x + 1)] +
-				    local_board[(y + 1) * w + x];
+int dE(int s, int x, int y, int w, int h, private int * nb) {
+	const int ds = nb[0] + nb[1] + nb[2] + nb[3];
 	return ((- s * ds) / 2) + 2;
 }
 
@@ -51,6 +48,9 @@ kernel void monte_carlo_step(global int * board,
 	local_board[y * w + x] = board[Y * W + X];
 	
 	barrier(CLK_LOCAL_MEM_FENCE);
+
+	int neighbors[4];
+	int s = 0;
 	
 	#pragma unroll
 	for (int itb = 0; itb < 2; ++itb) {
@@ -65,8 +65,14 @@ kernel void monte_carlo_step(global int * board,
 			#pragma unroll
 			for (int itt = 0; itt < 2; ++itt) {
 				if ((xy & 1) == itt) {
-					int s = local_board[y * w + x];
-					int de = dE(s, x, y, w, h, local_board);
+					s = local_board[y * w + x];
+
+					neighbors[0] = local_board[y * w + (x - 1)];
+				    neighbors[1] = local_board[(y - 1) * w + x];
+				    neighbors[2] = local_board[y * w + (x + 1)];
+				    neighbors[3] = local_board[(y + 1) * w + x];
+
+					int de = dE(s, x, y, w, h, neighbors);
 					
 					const float r = rand((float)Y / H, (float)X / W, seed);
 
@@ -83,7 +89,7 @@ kernel void monte_carlo_step(global int * board,
 			}
 
 			if (x == 1 || x + 2 == w || y == 1 || y + 2 == h)
-				board[Y * W + X] = local_board[y * w + x];
+				board[Y * W + X] = s;
 
 			if (X == 1) board[Y * W + 0] = board[Y * W + (W - 2)];
 			else if (X + 2 == W) board[Y * W + (X + 1)] = board[Y * W + 1];
@@ -95,12 +101,12 @@ kernel void monte_carlo_step(global int * board,
 		barrier(CLK_GLOBAL_MEM_FENCE);
 	}
 
-	board[Y * W + X] = local_board[y * w + x];
+	board[Y * W + X] = s;
 
-	if (local_board[y * w + x] == 1) atomic_inc(local_out);
-	else							 atomic_inc(local_out + 1);
+	if (s == 1) atomic_inc(local_out);
+	else		atomic_inc(local_out + 1);
 	
-	atomic_add(local_out + 2, local_board[y * w + x] * (local_board[(y - 1) * w + x]) + local_board[y * w + (x - 1)]);
+	atomic_add(local_out + 2, s * (neighbors[0] + neighbors[1]));
 	
 	barrier(CLK_LOCAL_MEM_FENCE);
 	

@@ -103,7 +103,7 @@ namespace model
                                   d.out.get_allocator().optimal_size(d.out.size()), (void*)d.out.data());
         d.kernel.setArg(4, d.out_buffer);
 
-        d.max_w = std::sqrt(d.devices[0].getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>());
+        d.max_w = min(16, std::sqrt(d.devices[0].getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>()));
     }
 
     inline void init_opencl_data(opencl_data & d, vector4096<cl_int> & data, size_t bw)
