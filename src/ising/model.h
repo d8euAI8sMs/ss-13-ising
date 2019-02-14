@@ -1,5 +1,7 @@
 #pragma once
 
+#define CL_HPP_ENABLE_EXCEPTIONS
+
 #include <util/common/geom/point.h>
 #include <util/common/math/vec.h>
 #include <util/common/plot/plot.h>
@@ -9,10 +11,19 @@
 #include <map>
 #include <array>
 
+#include <fstream>
+#include <streambuf>
+
 #include <omp.h>
+#include <CL/cl2.hpp>
+
+#include "aligned_allocator.h"
 
 namespace model
 {
+
+    template < typename T >
+    using vector4096 = std::vector < T, aligned_allocator < T, 4096 > > ;
 
     /*****************************************************/
     /*                     params                        */
@@ -48,6 +59,77 @@ namespace model
     }
 
     /*****************************************************/
+    /*                    opencl                         */
+    /*****************************************************/
+
+    struct opencl_data
+    {
+        cl::Platform platform;
+        cl::vector<cl::Device> devices;
+        cl::Context context;
+        cl::CommandQueue queue;
+        cl::Program program;
+        cl::Kernel kernel;
+        cl::Buffer buffer;
+        cl::Buffer out_buffer;
+        vector4096 < cl_int > out;
+        size_t board_w, w;
+        size_t max_w;
+    };
+
+    inline void init_opencl_common(opencl_data & d, bool gpu = true)
+    {
+        d.platform = cl::Platform::getDefault();
+    
+        d.platform.getDevices(gpu ? CL_DEVICE_TYPE_GPU : CL_DEVICE_TYPE_CPU, &d.devices);
+    
+        if (d.devices.empty()) throw "no valid cpu/gpu device found";
+    
+        d.context = cl::Context(d.devices[0]);
+    
+        d.queue = cl::CommandQueue(d.context, d.devices[0]);
+
+        std::ifstream input;
+        input.open("kernel.cl");
+        cl::string src((std::istreambuf_iterator<char>(input)),
+                       std::istreambuf_iterator<char>());
+
+        d.program = cl::Program(d.context, src, true);
+
+        d.kernel = cl::Kernel(d.program, "monte_carlo_step");
+        
+        d.out.resize(3);
+        d.out_buffer = cl::Buffer(d.context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR,
+                                  d.out.get_allocator().optimal_size(d.out.size()), (void*)d.out.data());
+        d.kernel.setArg(4, d.out_buffer);
+
+        d.max_w = std::sqrt(d.devices[0].getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>());
+    }
+
+    inline void init_opencl_data(opencl_data & d, vector4096<cl_int> & data, size_t bw)
+    {
+        d.board_w = bw;
+        d.w = min(bw, d.max_w);
+        d.buffer = cl::Buffer(d.context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR,
+                              data.get_allocator().optimal_size(data.size()), (void*)data.data());
+        d.kernel.setArg(0, d.buffer);
+        d.kernel.setArg(1, (d.w + 2) * (d.w + 2) * sizeof(cl_int), NULL);
+    }
+
+    inline void opencl_exec(opencl_data & d, cl_float2 probs)
+    {
+        d.out[0] = d.out[1] = d.out[2] = 0;
+
+        d.kernel.setArg(2, probs);
+
+        d.kernel.setArg(3, rand() / (RAND_MAX + 1.f));
+
+        d.queue.enqueueNDRangeKernel(d.kernel, cl::NullRange, { d.board_w, d.board_w }, { d.w, d.w });
+
+        d.queue.finish();
+    }
+
+    /*****************************************************/
     /*                     data                          */
     /*****************************************************/
 
@@ -68,8 +150,9 @@ namespace model
         };
     public:
         size_t w;
-        std::vector < int > data;
+        vector4096 < int > data;
         macroparams params;
+        opencl_data * ocl_data;
     private:
         avgparams aparams;
     public:
@@ -77,13 +160,15 @@ namespace model
         {
             w = p.n;
             data.clear();
-            data.resize((w + 2) * (w * 2));
+            data.resize((w + 2) * (w + 2));
             for (size_t i = 0; i < data.size(); ++i)
             {
                 data[i] = ((rand() & 1) == 1) ? 1 : -1;
             }
             ensure_periodic(p);
             aparams = { 0, 0, 0, 0, 0, nullptr, 0 };
+
+            init_opencl_data(*ocl_data, data, w);
         }
 
         void begin(const parameters & p, double T)
@@ -143,6 +228,22 @@ namespace model
             }
 
             params.e = std::abs(aparams.p->J * s / w / w);
+
+            aparams.ea += params.e;
+            aparams.ma += params.m;
+
+            aparams.e2a += params.e * params.e;
+            aparams.m2a += params.m * params.m;
+
+            ++aparams.n;
+        }
+
+        void next_opencl() {
+            opencl_exec(*ocl_data, cl_float2 { aparams.w[0], aparams.w[1] });
+
+            params.m = std::abs((double)ocl_data->out[0] - (double)ocl_data->out[1]) / w / w / w / w;
+
+            params.e = std::abs(aparams.p->J * ocl_data->out[2] / w / w);
 
             aparams.ea += params.e;
             aparams.ma += params.m;
@@ -293,6 +394,7 @@ namespace model
         plot_data   m_data;
         plot_data   c_data;
         plot_data   hi_data;
+        util::ptr_t < opencl_data > ocl_data;
         board       system_data;
     };
 
@@ -433,6 +535,9 @@ namespace model
         md.m_data = make_plot_data(plot::palette::pen(0x0000ff, 2));
         md.c_data = make_plot_data(plot::palette::pen(0x0000ff, 2));
         md.hi_data = make_plot_data(plot::palette::pen(0x0000ff, 2));
+        md.ocl_data = util::create < opencl_data > ();
+        init_opencl_common(*md.ocl_data);
+        md.system_data.ocl_data = md.ocl_data.get();
         return md;
     }
 }

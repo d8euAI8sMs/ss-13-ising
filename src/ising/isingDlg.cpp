@@ -235,7 +235,7 @@ void CIsingDlg::OnDemo()
     m_data.system_data.begin(*m_data.params, T);
     for (size_t i = 0; (i < m_S) && m_bWorking; ++i)
     {
-        m_data.system_data.next();
+        m_data.system_data.next_opencl();
         UpdateSpins(false);
     }
     m_data.system_data.end();
@@ -248,7 +248,7 @@ void CIsingDlg::OnDemo()
         m_data.system_data.begin(*m_data.params, T);
         for (size_t i = 0; (i < m_M) && m_bWorking; ++i)
         {
-            m_data.system_data.next();
+            m_data.system_data.next_opencl();
             UpdateSpins(false);
         }
         m_data.system_data.end();
@@ -269,7 +269,7 @@ void CIsingDlg::OnCalc()
     m_data.system_data.begin(*m_data.params, T0);
     for (size_t i = 0; (i < m_S * 10) && m_bWorking; ++i)
     {
-        m_data.system_data.next();
+        m_data.system_data.next_opencl();
         UpdateSpins(false);
     }
     m_data.system_data.end();
@@ -283,7 +283,7 @@ void CIsingDlg::OnCalc()
         m_data.system_data.begin(*m_data.params, T);
         for (size_t i = 0; (i < m_S) && m_bWorking; ++i)
         {
-            m_data.system_data.next();
+            m_data.system_data.next_opencl();
             UpdateSpins(false);
         }
         m_data.system_data.end();
@@ -292,7 +292,7 @@ void CIsingDlg::OnCalc()
         m_data.system_data.begin(*m_data.params, T);
         for (size_t i = 0; (i < m_M) && m_bWorking; ++i)
         {
-            m_data.system_data.next();
+            m_data.system_data.next_opencl();
             UpdateSpins(false);
         }
         m_data.system_data.end();

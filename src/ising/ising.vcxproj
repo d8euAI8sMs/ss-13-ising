@@ -116,6 +116,7 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="aligned_allocator.h" />
     <ClInclude Include="ising.h" />
     <ClInclude Include="isingDlg.h" />
     <ClInclude Include="model.h" />
