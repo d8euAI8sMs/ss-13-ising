@@ -101,7 +101,12 @@ namespace model
         cl::string src((std::istreambuf_iterator<char>(input)),
                        std::istreambuf_iterator<char>());
 
-        d.program = cl::Program(d.context, src, true);
+        d.program = cl::Program(d.context, src);
+        d.program.build("-cl-fast-relaxed-math "
+                        "-cl-finite-math-only "
+                        "-cl-unsafe-math-optimizations "
+                        "-cl-no-signed-zeros "
+                        "-cl-mad-enable");
 
         d.kernel = cl::Kernel(d.program, "monte_carlo_step");
         
@@ -111,6 +116,7 @@ namespace model
         d.kernel.setArg(4, d.out_buffer);
 
         d.max_w = min(16, std::sqrt(d.devices[0].getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>()));
+        if (gpu) d.max_w /= 2;
     }
 
     inline void init_opencl_data(opencl_data & d, vector4096<cl_int> & data, size_t bw)
