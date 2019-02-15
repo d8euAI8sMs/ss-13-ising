@@ -83,6 +83,11 @@ kernel void monte_carlo_step(global int * board,
 					}
 
 					local_board[y * w + x] = s;
+
+					if (s == 1) atomic_inc(local_out);
+					else		atomic_inc(local_out + 1);
+	
+					atomic_add(local_out + 2, s * (neighbors[0] + neighbors[1]));
 				}
 	
 				barrier(CLK_LOCAL_MEM_FENCE);
@@ -102,11 +107,6 @@ kernel void monte_carlo_step(global int * board,
 	}
 
 	board[Y * W + X] = s;
-
-	if (s == 1) atomic_inc(local_out);
-	else		atomic_inc(local_out + 1);
-	
-	atomic_add(local_out + 2, s * (neighbors[0] + neighbors[1]));
 	
 	barrier(CLK_LOCAL_MEM_FENCE);
 	
