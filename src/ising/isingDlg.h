@@ -60,4 +60,6 @@ public:
     afx_msg void OnBnClickedButton4();
     CButton m_bOpenCLCtrl;
     CButton m_bGpuCtrl;
+    CEdit m_sTimeCtrl;
+    LARGE_INTEGER m_liStart, m_liFreq, m_liStop;
 };

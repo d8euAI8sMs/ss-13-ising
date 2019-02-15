@@ -50,6 +50,7 @@ void CIsingDlg::DoDataExchange(CDataExchange* pDX)
     DDX_Text(pDX, IDC_EDIT6, m_M);
     DDX_Control(pDX, IDC_CHECK3, m_bOpenCLCtrl);
     DDX_Control(pDX, IDC_CHECK4, m_bGpuCtrl);
+    DDX_Control(pDX, IDC_EDIT9, m_sTimeCtrl);
 }
 
 BEGIN_MESSAGE_MAP(CIsingDlg, CSimulationDialog)
@@ -270,6 +271,9 @@ void CIsingDlg::OnCalc()
 
     double dT = (m_T2 - T0) / n;
 
+    QueryPerformanceFrequency(&m_liFreq);
+    QueryPerformanceCounter(&m_liStart);
+
     m_data.system_data.begin(*m_data.params, T0);
     for (size_t i = 0; (i < m_S * 10) && m_bWorking; ++i)
     {
@@ -311,6 +315,11 @@ void CIsingDlg::OnCalc()
             CString fmt; fmt.Format(TEXT("%lf"), maxT);
             m_Te.SetWindowText(fmt);
         }
+
+        QueryPerformanceCounter(&m_liStop);
+
+        CString fmt; fmt.Format(TEXT("%.3lfs"), (double)(m_liStop.QuadPart - m_liStart.QuadPart) / m_liFreq.QuadPart);
+        m_sTimeCtrl.SetWindowText(fmt);
     }
 }
 
