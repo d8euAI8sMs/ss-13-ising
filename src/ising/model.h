@@ -18,6 +18,7 @@
 #include <CL/cl2.hpp>
 
 #include "aligned_allocator.h"
+#include "openmp_kernel.h"
 
 namespace model
 {
@@ -188,59 +189,15 @@ namespace model
         void next(bool opencl)
         {
             if (opencl) next_opencl();
-            else        next();
+            else        next_openmp();
         }
 
-        void next()
-        {
-            int s = 0;
+        void next_opencl() {
+            opencl_exec(*ocl_data, cl_float2 { aparams.w[0], aparams.w[1] });
 
-            if ((w - 2) < 4 * omp_get_max_threads())
-                next_linear(w);
-            else
-                next_parallel(w);
-            
-            if (aparams.p->J > 0)
-            {
-                size_t np = 0, nm = 0;
-                for (size_t i = 1; i < w + 1; ++i)
-                #pragma omp parallel for reduction(+:np,nm,s) firstprivate(i)
-                for (int j = 1; j < w + 1; ++j)
-                {
-                    np += data[i * (w + 2) + j] == 1 ? 1 : 0;
-                    nm += data[i * (w + 2) + j] == -1 ? 0 : 1;
-                    s += spin_at(i, j) * (spin_at(i - 1, j) + spin_at(i, j - 1));
-                }
-                params.m = std::abs((double)np - (double)nm) / w / w / w / w;
-            }
-            else
-            {
-                size_t n1p = 0, n1m = 0, n2p = 0, n2m = 0;
-                for (size_t i = 1; i < w + 1; ++i)
-                {
-                    #pragma omp parallel for reduction(+:n1p,n1m,n2p,n2m,s) firstprivate(i)
-                    for (int j = 1 + (i & 1); j < w + 1; j += 2)
-                    {
-                        n1p += data[i * (w + 2) + j] == 1 ? 1 : 0;
-                        n1m += data[i * (w + 2) + j] == -1 ? 0 : 1;
-                        n2p += data[i * (w + 2) + j + 1] == 1 ? 1 : 0;
-                        n2m += data[i * (w + 2) + j + 1] == -1 ? 0 : 1;
-                        s += spin_at(i, j) * (spin_at(i - 1, j) + spin_at(i, j - 1));
-                    }
-                    #pragma omp parallel for reduction(+:n1p,n1m,n2p,n2m,s) firstprivate(i)
-                    for (int j = 1 + (1 - (i & 1)); j < w + 1; j += 2)
-                    {
-                        n1p += data[i * (w + 2) + j + 1] == 1 ? 1 : 0;
-                        n1m += data[i * (w + 2) + j + 1] == -1 ? 0 : 1;
-                        n2p += data[i * (w + 2) + j] == 1 ? 1 : 0;
-                        n2m += data[i * (w + 2) + j] == -1 ? 0 : 1;
-                        s += spin_at(i, j) * (spin_at(i - 1, j) + spin_at(i, j - 1));
-                    }
-                }
-                params.m = std::abs(((double)n1p - (double)n1m) - ((double)n2p - (double)n2m)) / w / w / w / w;
-            }
+            params.m = std::abs((double)ocl_data->out[0] - (double)ocl_data->out[1]) / w / w / w / w;
 
-            params.e = std::abs(aparams.p->J * s / w / w);
+            params.e = std::abs(aparams.p->J * ocl_data->out[2] / w / w);
 
             aparams.ea += params.e;
             aparams.ma += params.m;
@@ -251,12 +208,14 @@ namespace model
             ++aparams.n;
         }
 
-        void next_opencl() {
-            opencl_exec(*ocl_data, cl_float2 { aparams.w[0], aparams.w[1] });
+        void next_openmp() {
+            std::array < int, 3 > out = {{ 0, 0, 0 }};
 
-            params.m = std::abs((double)ocl_data->out[0] - (double)ocl_data->out[1]) / w / w / w / w;
+            omp_kernel::monte_carlo_step(w + 2, w + 2, data.data(), {{ (float)aparams.w[0], (float)aparams.w[1] }}, rand() / (RAND_MAX + 1.f), out);
 
-            params.e = std::abs(aparams.p->J * ocl_data->out[2] / w / w);
+            params.m = std::abs((double)out[0] - (double)out[1]) / w / w / w / w;
+
+            params.e = std::abs(aparams.p->J * out[2] / w / w);
 
             aparams.ea += params.e;
             aparams.ma += params.m;
@@ -296,92 +255,6 @@ namespace model
                 data[i * (p.n + 2) + p.n + 1] = data[i * (p.n + 2) + 1];
                 data[0 * (p.n + 2) + i] = data[p.n * (p.n + 2) + i];
                 data[(p.n + 1) * (p.n + 2) + i] = data[1 * (p.n + 2) + i];
-            }
-        }
-
-        void ensure_periodic(const parameters & p, size_t i, size_t j)
-        {
-            data[(p.n + 1) * (p.n + 2) + j] = data[1 * (p.n + 2) + j];
-            data[i * (p.n + 2) + p.n + 1] = data[i * (p.n + 2) + 1];
-            data[0 * (p.n + 2) + j] = data[p.n * (p.n + 2) + j];
-            data[i * (p.n + 2) + 0] = data[i * (p.n + 2) + p.n];
-        }
-
-        size_t dE(size_t i, size_t j) const
-        {
-            int s = spin_at(i, j - 1) + spin_at(i, j + 1) +
-                    spin_at(i - 1, j) + spin_at(i + 1, j);
-            s *= aparams.p->J < 0 ? -1 : 1;
-            return - spin_at(i, j) * s / 2 + 2;
-        }
-
-        void next_linear(size_t n)
-        {
-            for (size_t l = 0; l < n * n; ++l)
-            {
-                size_t i = (rand() % n) + 1;
-                size_t j = (rand() % n) + 1;
-                size_t c = dE(i, j);
-                if (c >= 2) data[i * (n + 2) + j] = -data[i * (n + 2) + j];
-                else
-                {
-                    if (rand() < aparams.w[c] * RAND_MAX)
-                        data[i * (n + 2) + j] = -data[i * (n + 2) + j];
-                }
-                ensure_periodic(*aparams.p, i, j);
-            }
-        }
-
-        void next_parallel(size_t n)
-        {
-            std::vector < std::array < size_t, 3 > > ranges(omp_get_max_threads());
-            size_t d = (size_t) std::ceil((double) n / omp_get_max_threads());
-            for (size_t i = 0; (i < omp_get_max_threads()) && (n > i * d); ++i)
-            {
-                ranges[i][0] = i * d;
-                ranges[i][1] = min((i + 1) * d, n);
-                ranges[i][2] = min(d, n - i * d) * n;
-            }
-
-            #pragma omp parallel firstprivate(ranges)
-            {
-                auto tid = omp_get_thread_num();
-                auto b = std::get<0>(ranges[tid]);
-                auto e = std::get<1>(ranges[tid]);
-                for (size_t l = 0; l < std::get<2>(ranges[tid]); ++l)
-                {
-                    size_t i = b + rand() % (e - b) + 1;
-                    size_t j = (rand() % n) + 1;
-                    if (i == 1 || i == e || j == 1 || j == n)
-                    {
-                        #pragma omp critical
-                        {
-                            size_t c = dE(i, j);
-                            if (c >= 2) data[i * (n + 2) + j] = -data[i * (n + 2) + j];
-                            else
-                            {
-                                if (rand() < aparams.w[c] * RAND_MAX)
-                                    data[i * (n + 2) + j] = -data[i * (n + 2) + j];
-                            }
-                            ensure_periodic(*aparams.p, i, j);
-                        }
-                    }
-                    else
-                    {
-                        size_t c = dE(i, j);
-                        if (c >= 2) data[i * (n + 2) + j] = -data[i * (n + 2) + j];
-                        else
-                        {
-                            if (rand() < aparams.w[c] * RAND_MAX)
-                                data[i * (n + 2) + j] = -data[i * (n + 2) + j];
-                        }
-                        if (i == n || i == 1 || j == n || j == 1)
-                        {
-                            #pragma omp critical
-                            ensure_periodic(*aparams.p, i, j);
-                        }
-                    }
-                }
             }
         }
     };
