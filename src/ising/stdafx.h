@@ -8,6 +8,8 @@
 #define VC_EXTRALEAN            // Exclude rarely-used stuff from Windows headers
 #endif
 
+#define CL_HPP_ENABLE_EXCEPTIONS
+
 #include <CL/cl2.hpp>
 
 #include "targetver.h"

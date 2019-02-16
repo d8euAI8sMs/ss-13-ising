@@ -1,7 +1,5 @@
 #pragma once
 
-#define CL_HPP_ENABLE_EXCEPTIONS
-
 #include <util/common/geom/point.h>
 #include <util/common/math/vec.h>
 #include <util/common/plot/plot.h>
