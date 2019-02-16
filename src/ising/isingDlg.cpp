@@ -238,10 +238,17 @@ void CIsingDlg::OnDemo()
     double T = m_data.params->Tc() * m_T;
 
     m_data.system_data.begin(*m_data.params, T);
-    for (size_t i = 0; (i < m_S) && m_bWorking; ++i)
+    if (m_bKeyFrames.GetCheck())
     {
-        m_data.system_data.next(m_bOpenCLCtrl.GetCheck());
-        UpdateSpins(false);
+        m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), m_S);
+    }
+    else
+    {
+        for (size_t i = 0; (i < m_S) && m_bWorking; ++i)
+        {
+            m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), 1);
+            UpdateSpins(false);
+        }
     }
     m_data.system_data.end();
     UpdateSpins(true);
@@ -251,10 +258,17 @@ void CIsingDlg::OnDemo()
         ++time;
         Invoke([this, &T] () { T = m_data.params->Tc() * m_T; });
         m_data.system_data.begin(*m_data.params, T);
-        for (size_t i = 0; (i < m_M) && m_bWorking; ++i)
+        if (m_bKeyFrames.GetCheck())
         {
-            m_data.system_data.next(m_bOpenCLCtrl.GetCheck());
-            UpdateSpins(false);
+            m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), m_M);
+        }
+        else
+        {
+            for (size_t i = 0; (i < m_M) && m_bWorking; ++i)
+            {
+                m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), 1);
+                UpdateSpins(false);
+            }
         }
         m_data.system_data.end();
 
@@ -275,10 +289,17 @@ void CIsingDlg::OnCalc()
     QueryPerformanceCounter(&m_liStart);
 
     m_data.system_data.begin(*m_data.params, T0);
-    for (size_t i = 0; (i < m_S * 10) && m_bWorking; ++i)
+    if (m_bKeyFrames.GetCheck())
     {
-        m_data.system_data.next(m_bOpenCLCtrl.GetCheck());
-        UpdateSpins(false);
+        m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), m_S * 10);
+    }
+    else
+    {
+        for (size_t i = 0; (i < m_S * 10) && m_bWorking; ++i)
+        {
+            m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), 1);
+            UpdateSpins(false);
+        }
     }
     m_data.system_data.end();
     UpdateSpins(true);
@@ -289,19 +310,33 @@ void CIsingDlg::OnCalc()
     {
         double T = Tc * (dT * t + T0);
         m_data.system_data.begin(*m_data.params, T);
-        for (size_t i = 0; (i < m_S) && m_bWorking; ++i)
+        if (m_bKeyFrames.GetCheck())
         {
-            m_data.system_data.next(m_bOpenCLCtrl.GetCheck());
-            UpdateSpins(false);
+            m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), m_S);
+        }
+        else
+        {
+            for (size_t i = 0; (i < m_S) && m_bWorking; ++i)
+            {
+                m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), 1);
+                UpdateSpins(false);
+            }
         }
         m_data.system_data.end();
         UpdateSpins(true);
 
         m_data.system_data.begin(*m_data.params, T);
-        for (size_t i = 0; (i < m_M) && m_bWorking; ++i)
+        if (m_bKeyFrames.GetCheck())
         {
-            m_data.system_data.next(m_bOpenCLCtrl.GetCheck());
-            UpdateSpins(false);
+            m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), m_M);
+        }
+        else
+        {
+            for (size_t i = 0; (i < m_M) && m_bWorking; ++i)
+            {
+                m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), 1);
+                UpdateSpins(false);
+            }
         }
         m_data.system_data.end();
 

@@ -26,6 +26,7 @@ kernel void monte_carlo_step(global int * board,
 							 local int * local_board,
 							 float2 probabilities,
 							 float seed,
+							 int N,
 							 volatile global int * out)
 {
     const int X = get_global_id(0) + 1;
@@ -52,6 +53,8 @@ kernel void monte_carlo_step(global int * board,
 	int neighbors[4];
 	int s = 0;
 	
+	for (int it = 0; it < N; ++it) {
+
 	#pragma unroll
 	for (int itb = 0; itb < 2; ++itb) {
 		if ((ij & 1) == itb) {
@@ -74,7 +77,7 @@ kernel void monte_carlo_step(global int * board,
 
 					int de = dE(s, x, y, w, h, neighbors);
 					
-					const float r = rand((float)Y / H, (float)X / W, seed);
+					const float r = rand((float)Y / H, (float)X / W, seed + (float)it / N);
 
 					if (de >= 2) {
 						s = -s;
@@ -103,16 +106,20 @@ kernel void monte_carlo_step(global int * board,
 			else if (Y + 2 == H) board[(Y + 1) * W + X] = board[1 * W + X];
 		}
 	
-		if (itb == 0) barrier(CLK_GLOBAL_MEM_FENCE);
+		barrier(CLK_GLOBAL_MEM_FENCE);
 	}
-
-	board[Y * W + X] = s;
 	
 	barrier(CLK_LOCAL_MEM_FENCE);
 	
 	if (x == 1 && y == 1) {
-		atomic_add(out, local_out[0]);
-		atomic_add(out + 1, local_out[1]);
-		atomic_add(out + 2, local_out[2]);
+		atomic_add(out + 0 + it * 3, local_out[0]);
+		atomic_add(out + 1 + it * 3, local_out[1]);
+		atomic_add(out + 2 + it * 3, local_out[2]);
+		atom_xchg(local_out, 0);
+		atom_xchg(local_out + 1, 0);
+		atom_xchg(local_out + 2, 0);
 	}
+	}
+
+	board[Y * W + X] = s;
 }

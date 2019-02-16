@@ -52,7 +52,7 @@ namespace model
         parameters p =
         {
             // system params
-            10,
+            16,
 
             // other params
             1,
@@ -107,11 +107,6 @@ namespace model
                         "-cl-mad-enable");
 
         d.kernel = cl::Kernel(d.program, "monte_carlo_step");
-        
-        d.out.resize(3);
-        d.out_buffer = cl::Buffer(d.context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR,
-                                  d.out.get_allocator().optimal_size(d.out.size()), (void*)d.out.data());
-        d.kernel.setArg(4, d.out_buffer);
 
         d.max_w = min(16, std::sqrt(d.devices[0].getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>()));
         if (gpu) d.max_w /= 2;
@@ -127,9 +122,15 @@ namespace model
         d.kernel.setArg(1, (d.w + 2) * (d.w + 2) * sizeof(cl_int), NULL);
     }
 
-    inline void opencl_exec(opencl_data & d, cl_float2 probs)
+    inline void opencl_exec(opencl_data & d, cl_float2 probs, size_t batch_size)
     {
-        d.out[0] = d.out[1] = d.out[2] = 0;
+        d.out.clear();
+        d.out.resize(3 * batch_size);
+        d.out_buffer = cl::Buffer(d.context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR,
+                                  d.out.get_allocator().optimal_size(d.out.size()), (void*)d.out.data());
+        d.kernel.setArg(5, d.out_buffer);
+
+        d.kernel.setArg(4, (int)batch_size);
 
         d.kernel.setArg(2, probs);
 
@@ -190,26 +191,33 @@ namespace model
             aparams.w[1] = std::exp(- 4 * std::abs(p.J) / consts::k / T);
         }
 
-        void next(bool opencl)
+        void next(bool opencl, size_t batch_size)
         {
-            if (opencl) next_opencl();
-            else        next_openmp();
+            if (opencl) next_opencl(batch_size);
+            else        next_openmp(batch_size);
         }
 
-        void next_opencl() {
-            opencl_exec(*ocl_data, cl_float2 { aparams.w[0], aparams.w[1] });
+        void next_opencl(size_t batch_size) {
+            opencl_exec(*ocl_data, cl_float2 { aparams.w[0], aparams.w[1] }, batch_size);
 
-            params.m = std::abs((double)ocl_data->out[0] - (double)ocl_data->out[1]) / w / w / w / w;
+            for (size_t i = 0; i < batch_size; ++i)
+            {
+                params.m = std::abs((double)ocl_data->out[0 + i * 3] - (double)ocl_data->out[1 + i * 3]) / w / w / w / w;
 
-            params.e = std::abs(aparams.p->J * ocl_data->out[2] / w / w);
+                params.e = std::abs(aparams.p->J * ocl_data->out[2 + i * 3] / w / w);
 
-            aparams.ea += params.e;
-            aparams.ma += params.m;
+                aparams.ea += params.e;
+                aparams.ma += params.m;
 
-            aparams.e2a += params.e * params.e;
-            aparams.m2a += params.m * params.m;
+                aparams.e2a += params.e * params.e;
+                aparams.m2a += params.m * params.m;
 
-            ++aparams.n;
+                ++aparams.n;
+            }
+        }
+
+        void next_openmp(size_t batch_size) {
+            for (size_t i = 0; i < batch_size; ++i) next_openmp();
         }
 
         void next_openmp() {
