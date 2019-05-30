@@ -51,10 +51,9 @@ public:
     size_t m_M;
     bool m_bFixedT;
     CButton m_bKeyFrames;
-    CButton m_bPaint;
     afx_msg void OnBnClickedButton3();
     void CleanPlot();
-    void UpdatePlot(double tOrT);
+    void UpdatePlot(double tOrT, bool redraw);
     void UpdateSpins(bool keyframe);
     CEdit m_Te;
     afx_msg void OnBnClickedButton4();

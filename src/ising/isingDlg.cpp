@@ -39,7 +39,6 @@ void CIsingDlg::DoDataExchange(CDataExchange* pDX)
     DDX_Control(pDX, IDC_SPIN4, m_cPlot);
     DDX_Control(pDX, IDC_SPIN5, m_hiPlot);
     DDX_Control(pDX, IDC_CHECK1, m_bKeyFrames);
-    DDX_Control(pDX, IDC_CHECK2, m_bPaint);
     DDX_Control(pDX, IDC_EDIT8, m_Te);
     DDX_Text(pDX, IDC_EDIT1, m_nN);
     DDX_Text(pDX, IDC_EDIT2, m_J);
@@ -97,8 +96,6 @@ BOOL CIsingDlg::OnInitDialog()
     m_magPlot.triple_buffered = true;
     m_cPlot.triple_buffered = true;
     m_hiPlot.triple_buffered = true;
-
-    m_bPaint.SetCheck(BST_CHECKED);
 
     return TRUE;  // return TRUE  unless you set the focus to a control
 }
@@ -198,31 +195,33 @@ void CIsingDlg::CleanPlot()
     m_data.hi_data.autoworld->clear();
 }
 
-void CIsingDlg::UpdatePlot(double x)
+void CIsingDlg::UpdatePlot(double x, bool redraw)
 {
     m_data.e_data.data->emplace_back(x, m_data.system_data.params.e);
     m_data.m_data.data->emplace_back(x, m_data.system_data.params.m);
     m_data.c_data.data->emplace_back(x, m_data.system_data.params.c);
     m_data.hi_data.data->emplace_back(x, m_data.system_data.params.hi);
-    m_data.e_data.autoworld->setup(*m_data.e_data.data);
-    m_data.m_data.autoworld->setup(*m_data.m_data.data);
-    m_data.c_data.autoworld->setup(*m_data.c_data.data);
-    m_data.hi_data.autoworld->setup(*m_data.hi_data.data);
-    m_energyPlot.RedrawBuffer(); m_energyPlot.SwapBuffers();
-    m_magPlot.RedrawBuffer(); m_magPlot.SwapBuffers();
-    m_cPlot.RedrawBuffer(); m_cPlot.SwapBuffers();
-    m_hiPlot.RedrawBuffer(); m_hiPlot.SwapBuffers();
-    Invoke([this] () {
-        m_energyPlot.RedrawWindow();
-        m_magPlot.RedrawWindow();
-        m_cPlot.RedrawWindow();
-        m_hiPlot.RedrawWindow();
-    });
+    if (redraw)
+    {
+        m_data.e_data.autoworld->setup(*m_data.e_data.data);
+        m_data.m_data.autoworld->setup(*m_data.m_data.data);
+        m_data.c_data.autoworld->setup(*m_data.c_data.data);
+        m_data.hi_data.autoworld->setup(*m_data.hi_data.data);
+        m_energyPlot.RedrawBuffer(); m_energyPlot.SwapBuffers();
+        m_magPlot.RedrawBuffer(); m_magPlot.SwapBuffers();
+        m_cPlot.RedrawBuffer(); m_cPlot.SwapBuffers();
+        m_hiPlot.RedrawBuffer(); m_hiPlot.SwapBuffers();
+        Invoke([this] () {
+            m_energyPlot.RedrawWindow();
+            m_magPlot.RedrawWindow();
+            m_cPlot.RedrawWindow();
+            m_hiPlot.RedrawWindow();
+        });
+    }
 }
 
 void CIsingDlg::UpdateSpins(bool keyframe)
 {
-    if (m_bPaint.GetCheck() != BST_CHECKED) return;
     if (keyframe == (m_bKeyFrames.GetCheck() == BST_CHECKED))
     {
         m_spinPlot.RedrawBuffer();
@@ -272,7 +271,7 @@ void CIsingDlg::OnDemo()
         }
         m_data.system_data.end();
 
-        UpdatePlot(time);
+        UpdatePlot(time, true);
         UpdateSpins(true);
     }
 }
@@ -285,77 +284,103 @@ void CIsingDlg::OnCalc()
 
     double dT = (m_T2 - T0) / n;
 
+    double tm = 0, ts = 0;
+
+    bool cl = m_bOpenCLCtrl.GetCheck();
+    bool kf = m_bKeyFrames.GetCheck();
+
+    for (size_t ex = 0; ex < 5; ++ex)
+    {
+
     QueryPerformanceFrequency(&m_liFreq);
     QueryPerformanceCounter(&m_liStart);
 
     m_data.system_data.begin(*m_data.params, T0);
-    if (m_bKeyFrames.GetCheck())
+    if (kf)
     {
-        m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), m_S * 10);
+        m_data.system_data.next(cl, m_S * 10);
     }
     else
     {
-        for (size_t i = 0; (i < m_S * 10) && m_bWorking; ++i)
+        for (size_t i = 0; (i < m_S * 10); ++i)
         {
-            m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), 1);
-            UpdateSpins(false);
+            m_data.system_data.next(cl, 1);
         }
     }
     m_data.system_data.end();
-    UpdateSpins(true);
 
     double maxC = 0, maxT = 0;
 
-    for (size_t t = 0; (t <= n) && m_bWorking; ++t)
+    for (size_t t = 0; (t <= n); ++t)
     {
         double T = Tc * (dT * t + T0);
         m_data.system_data.begin(*m_data.params, T);
-        if (m_bKeyFrames.GetCheck())
+        if (kf)
         {
-            m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), m_S);
+            m_data.system_data.next(cl, m_S);
         }
         else
         {
-            for (size_t i = 0; (i < m_S) && m_bWorking; ++i)
+            for (size_t i = 0; (i < m_S); ++i)
             {
-                m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), 1);
-                UpdateSpins(false);
+                m_data.system_data.next(cl, 1);
             }
         }
         m_data.system_data.end();
-        UpdateSpins(true);
 
         m_data.system_data.begin(*m_data.params, T);
-        if (m_bKeyFrames.GetCheck())
+        if (kf)
         {
-            m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), m_M);
+            m_data.system_data.next(cl, m_M);
         }
         else
         {
-            for (size_t i = 0; (i < m_M) && m_bWorking; ++i)
+            for (size_t i = 0; (i < m_M); ++i)
             {
-                m_data.system_data.next(m_bOpenCLCtrl.GetCheck(), 1);
-                UpdateSpins(false);
+                m_data.system_data.next(cl, 1);
             }
         }
         m_data.system_data.end();
 
-        UpdatePlot(T / Tc);
-        UpdateSpins(true);
+        UpdatePlot(T / Tc, false);
 
         if (m_data.system_data.params.c > maxC)
         {
             maxC = m_data.system_data.params.c;
             maxT = T / Tc;
-            CString fmt; fmt.Format(TEXT("%lf"), maxT);
-            m_Te.SetWindowText(fmt);
         }
-
-        QueryPerformanceCounter(&m_liStop);
-
-        CString fmt; fmt.Format(TEXT("%.3lfs"), (double)(m_liStop.QuadPart - m_liStart.QuadPart) / m_liFreq.QuadPart);
-        m_sTimeCtrl.SetWindowText(fmt);
     }
+
+    QueryPerformanceCounter(&m_liStop);
+
+    CString fmt; fmt.Format(TEXT("%.3lfs"), (double)(m_liStop.QuadPart - m_liStart.QuadPart) / m_liFreq.QuadPart);
+    m_sTimeCtrl.SetWindowText(fmt);
+
+    fmt.Format(TEXT("%lf"), maxT);
+    m_Te.SetWindowText(fmt);
+
+    m_data.system_data.params.e = 0;
+    m_data.system_data.params.m = 0;
+    m_data.system_data.params.c = 0;
+    m_data.system_data.params.hi = 0;
+
+    UpdatePlot(m_T2, false);
+    UpdatePlot(m_T, true);
+
+    double tt = (double)(m_liStop.QuadPart - m_liStart.QuadPart) / m_liFreq.QuadPart;
+    tm += tt;
+    ts += tt * tt;
+
+    }
+
+    tm /= 5;
+    ts /= 5;
+
+    ts -= tm * tm;
+    ts = std::sqrt(ts);
+
+    CString fmt; fmt.Format(TEXT("%.3lfs pm %.3lfs"), tm, ts);
+    m_sTimeCtrl.SetWindowText(fmt);
 }
 
 
