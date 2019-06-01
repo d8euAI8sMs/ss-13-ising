@@ -1,9 +1,9 @@
 // opencl kernel
 // monte-carlo simulation
 
-float rand(float x, float y, float z) {
-    float ptr = 0.0f;
-    return fract(sin(x * 112.9898f + y * 179.233f + z * 237.212f) * 43758.5453f, &ptr);
+double rand(double x, double y, double z) {
+    double ptr = 0.0;
+    return fract(sin(x * 112.9898 + y * 179.233 + z * 237.212) * 43758.5453, &ptr);
 }
 
 int dE(int s, int x, int y, int w, int h, private int * nb) {
@@ -24,8 +24,8 @@ kernel void rng(global int * board, float seed) {
 
 kernel void monte_carlo_step(global int * board,
 							 local int * local_board,
-							 float2 probabilities,
-							 float seed,
+							 double2 probabilities,
+							 double seed,
 							 int N,
 							 volatile global int * out)
 {
@@ -77,7 +77,7 @@ kernel void monte_carlo_step(global int * board,
 
 					int de = dE(s, x, y, w, h, neighbors);
 					
-					const float r = rand((float)Y / H, (float)X / W, seed + (float)it / N);
+					const double r = rand((double)Y / H, (double)X / W, seed + (double)it / N);
 
 					if (de >= 2) {
 						s = -s;

@@ -100,8 +100,7 @@ namespace model
                        std::istreambuf_iterator<char>());
 
         d.program = cl::Program(d.context, src);
-        d.program.build("-cl-fast-relaxed-math "
-                        "-cl-finite-math-only "
+        d.program.build("-cl-finite-math-only "
                         "-cl-unsafe-math-optimizations "
                         "-cl-no-signed-zeros "
                         "-cl-mad-enable");
@@ -122,7 +121,7 @@ namespace model
         d.kernel.setArg(1, (d.w + 2) * (d.w + 2) * sizeof(cl_int), NULL);
     }
 
-    inline void opencl_exec(opencl_data & d, cl_float2 probs, size_t batch_size)
+    inline void opencl_exec(opencl_data & d, cl_double2 probs, size_t batch_size)
     {
         d.out.clear();
         d.out.resize(3 * batch_size);
@@ -134,7 +133,7 @@ namespace model
 
         d.kernel.setArg(2, probs);
 
-        d.kernel.setArg(3, rand() / (RAND_MAX + 1.f));
+        d.kernel.setArg(3, rand() / (RAND_MAX + 1.));
 
         d.queue.enqueueNDRangeKernel(d.kernel, cl::NullRange, { d.board_w, d.board_w }, { d.w, d.w });
 
@@ -198,7 +197,7 @@ namespace model
         }
 
         void next_opencl(size_t batch_size) {
-            opencl_exec(*ocl_data, cl_float2 { aparams.w[0], aparams.w[1] }, batch_size);
+            opencl_exec(*ocl_data, cl_double2 { aparams.w[0], aparams.w[1] }, batch_size);
 
             for (size_t i = 0; i < batch_size; ++i)
             {
